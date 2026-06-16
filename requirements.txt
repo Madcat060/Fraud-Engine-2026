@@ -1,0 +1,15 @@
+flask
+flask-cors
+flask-socketio
+requests
+pyinstaller
+sqlalchemy
+pandas
+python-dateutil
+pyodbc
+openpyxl
+apscheduler
+python-dotenv
+psycopg2-binary
+tqdm
+pydantic>=2.4

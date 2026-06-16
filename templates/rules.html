@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fraud Rule Config — All 24 Rules</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .rules-page { max-width: 960px; margin: 0 auto; padding: 24px; }
+        .rules-header { margin-bottom: 24px; border-bottom: 1px solid #e2e8f0; padding-bottom: 16px; }
+        .rules-header h1 { margin: 0 0 8px 0; font-size: 1.5rem; font-weight: 700; }
+        .rules-header p { color: #64748b; margin: 0 0 16px 0; font-size: 0.875rem; }
+        .rule-accordion { border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
+        .rule-accordion-header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; background: #f8fafc; cursor: pointer; }
+        .rule-accordion-header:hover { background: #f1f5f9; }
+        .rule-id-badge { font-weight: 700; color: #1e293b; min-width: 56px; }
+        .rule-name { font-weight: 600; color: #1e293b; }
+        .rule-category { font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; background: #e0e7ff; color: #3730a3; }
+        .rule-toggle-wrap { margin-left: auto; }
+        .rule-header-score { font-weight: 600; color: #334155; }
+        .rule-body { padding: 16px; background: #fff; border-top: 1px solid #e2e8f0; }
+        .rule-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+        .rule-tab { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; cursor: pointer; font-size: 0.875rem; }
+        .rule-tab.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+        .rule-tab-content { display: none; }
+        .rule-tab-content.active { display: block; }
+        .rule-params-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+        .rule-param { display: flex; align-items: center; gap: 6px; }
+        .rule-param label { font-size: 0.8125rem; color: #334155; min-width: 180px; }
+        .rule-param input { width: 110px; padding: 6px 8px; font-size: 0.875rem; border: 1px solid #cbd5e1; border-radius: 4px; }
+        .rule-excl-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+        .rule-excl-row label { font-size: 0.8125rem; color: #64748b; }
+        .rule-save { margin-top: 12px; }
+        .rules-loading { padding: 48px; text-align: center; color: #64748b; }
+        .rules-error { padding: 16px; background: #fef2f2; color: #b91c1c; border-radius: 8px; margin-bottom: 16px; }
+        .rules-success { padding: 16px; background: #ecfdf5; color: #047857; border-radius: 8px; margin-bottom: 16px; }
+        .rules-save-all { margin-bottom: 24px; }
+        .rule-dynamic-desc { font-size: 0.8125rem; color: #475569; margin-top: 12px; padding: 10px 12px; background: #f1f5f9; border-radius: 6px; line-height: 1.4; }
+        .rule-weight-row { margin-bottom: 16px; padding: 10px 12px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0; }
+        .rule-weight-row label { font-weight: 600; color: #1e293b; display: block; margin-bottom: 6px; }
+        .rule-weight-row input { width: 100px; padding: 6px 8px; font-size: 0.875rem; border: 1px solid #cbd5e1; border-radius: 4px; }
+        .rule-weight-row .help { font-size: 0.8125rem; color: #64748b; margin-top: 6px; }
+    </style>
+</head>
+<body>
+    <div class="rules-page">
+        <div class="rules-header">
+            <h1>Fraud Rule Config</h1>
+            <p>Configure all <strong>24 rules</strong> in one place. Every value the engine uses can be changed here.</p>
+            <p>Save writes to the <strong>fraud_rule_configs</strong> table so the engine uses these values on the next run.</p>
+            <p><strong>Logic:</strong> the trigger (BB/100, rake thresholds, min hands, etc.). <strong>Exclusions:</strong> Sniper filters (Min Hands, ROI Range, Profit Range, Rake floor) — players inside these ranges are not flagged.</p>
+        </div>
+        <div id="rulesLoading" class="rules-loading">Loading fraud rule configs…</div>
+        <div id="rulesError" class="rules-error" style="display:none;"></div>
+        <div id="rulesSuccess" class="rules-success" style="display:none;">Saved successfully. The engine will use these settings on the next run.</div>
+        <div id="rulesContent" style="display:none;">
+            <button type="button" class="btn btn-primary rules-save-all" id="btnSaveAll">Save all rules</button>
+            <div id="rulesList"></div>
+        </div>
+    </div>
+    <script>
+(function() {
+    var PARAM_LABELS = {
+        min_suspicious_bb: 'Min suspicious BB', rake_per_hand_max_bb: 'Rake per hand max (BB)', rule1_min_hands: 'Min hands (Rule 1)',
+        max_age_days: 'Max account age (days)', burner_roi_threshold: 'Burner ROI threshold %', oracle_threshold: 'BB/100 threshold (Oracle)',
+        rule3_min_hands: 'Min hands (Rule 3)', rule3_min_profit: 'Min profit $ (Rule 3)', min_hands_threshold: 'Sniper: min hands (no BB/100 or Payout flags below this)', rule4_max_hands: 'Max hands (Rule 4)', rule4_min_bb: 'Min profit (BB) (Rule 4)',
+        stake_jump_mult: 'Stake jump multiplier', rule6_min_unique_hours: 'Min unique hours (24h)', pairing_rate_min_hands: 'Min hands with partner',
+        pairing_rate_threshold_pct: 'Pairing rate % threshold', rule8_min_overlap: 'Min overlapping starts', min_win_pct: 'Min win rate % (BB/100)',
+        max_rake_per_hand: 'Max rake per hand $', rule9_min_hands: 'Min hands (Rule 9)', min_flags: 'Min network flags', min_accounts: 'Min linked accounts',
+        rule12_min_subnets: 'Min IP subnets (Rule 12)', rule13_min_accounts: 'Min accounts (Rule 13)', rule13_lookback_days: 'Lookback days (Rule 13)',
+        rule14_min_loss: 'Min loss $ (Rule 14)', rule15_min_players: 'Max players (small game)', rule18_min_hands: 'Min hands (Rule 18)', rule18_max_hands: 'Max hands (Rule 18)',
+        rule18_max_loss_bb: 'Max loss (BB) (Rule 18)', rule19_min_accounts: 'Min accounts (Rule 19)', payout_floor: 'Payout threshold %',
+        bet_floor: 'Min bets (Rule 22)', min_skins: 'Min cardrooms (Rule 23)', min_countries: 'Min countries (Rule 24)'
+    };
+    function paramLabel(key) { return PARAM_LABELS[key] || key.replace(/_/g, ' '); }
+
+    function normExcl(ex) {
+        if (!ex || typeof ex !== 'object') return { min_hands: null, roi_from: null, roi_to: null, profit_from: null, profit_to: null, rake_floor: null };
+        var roi = ex.roi_range || {};
+        var pr = ex.profit_range || {};
+        return {
+            min_hands: ex.min_hands != null ? ex.min_hands : null,
+            roi_from: (roi.from != null ? roi.from : ex.roi_from) ?? null,
+            roi_to: (roi.to != null ? roi.to : ex.roi_to) ?? null,
+            profit_from: (pr.from != null ? pr.from : ex.net_profit_from) ?? null,
+            profit_to: (pr.to != null ? pr.to : ex.net_profit_to) ?? null,
+            rake_floor: ex.rake_floor != null ? ex.rake_floor : null
+        };
+    }
+
+    var configs = [];
+    var openRuleIds = {};
+
+    function toggleOpen(ruleId) {
+        openRuleIds[ruleId] = !openRuleIds[ruleId];
+        var el = document.getElementById('rule-body-' + ruleId);
+        if (el) el.style.display = openRuleIds[ruleId] ? 'block' : 'none';
+    }
+
+    function renderRule(rule) {
+        var id = rule.rule_id;
+        var name = rule.rule_name || rule.name || 'Rule ' + id;
+        var cat = rule.category || 'General Anomalies';
+        var active = rule.active !== false && rule.is_active !== false;
+        var params = rule.parameters || {};
+        var paramKeys = Object.keys(params);
+        var ex = normExcl(rule.exclusions);
+
+        var weightVal = (rule.weight != null && rule.weight !== '') ? Number(rule.weight) : 50;
+        if (isNaN(weightVal)) weightVal = 50;
+        var div = document.createElement('div');
+        div.className = 'rule-accordion';
+        div.innerHTML =
+            '<div class="rule-accordion-header" data-rule-id="' + id + '">' +
+            '<span class="rule-id-badge">Rule ' + id + '</span>' +
+            '<span class="rule-name">' + escapeHtml(name) + '</span>' +
+            '<span class="rule-category">' + escapeHtml(cat) + '</span>' +
+            '<span class="rule-header-score">Score: ' + weightVal + '</span>' +
+            '<span class="rule-toggle-wrap"><label><input type="checkbox" class="rule-active-cb" data-rule-id="' + id + '" ' + (active ? 'checked' : '') + '> Active</label></span>' +
+            '</div>' +
+            '<div class="rule-body" id="rule-body-' + id + '" style="display:none">' +
+            '<div class="rule-tabs">' +
+            '<button type="button" class="rule-tab active" data-tab="logic">Logic</button>' +
+            '<button type="button" class="rule-tab" data-tab="excl">Exclusions</button>' +
+            '</div>' +
+            '<div id="rule-logic-' + id + '" class="rule-tab-content active">' +
+            '<div class="rule-weight-row">' +
+            '<label>Risk Score (Weight):</label>' +
+            '<input type="number" min="0" step="1" class="rule-weight-input" data-rule-id="' + id + '" value="' + weightVal + '" title="Contribution to risk score when this rule triggers">' +
+            '<p class="help">Contribution to the player risk score when this rule triggers (points; defaults vary by rule in <code>fraud_rule_config_schema.py</code>). Same value is used by the engine and the main config.</p>' +
+            '</div>' +
+            (paramKeys.length ? ('<div class="rule-params-grid" id="rule-params-' + id + '"></div>') : '<p style="font-size:0.875rem;color:#64748b;">No rule-specific thresholds; use Exclusions below.</p>') +
+            '</div>' +
+            '<div id="rule-excl-' + id + '" class="rule-tab-content" style="display:none">' +
+            '<div class="rule-excl-row"><label>Min Lifetime Hands</label><input type="number" class="rule-excl-min-hands" data-rule-id="' + id + '" value="' + (ex.min_hands ?? '') + '" placeholder="—"></div>' +
+            '<div class="rule-excl-row"><label>ROI From %</label><input type="number" class="rule-excl-roi-from" data-rule-id="' + id + '" value="' + (ex.roi_from ?? '') + '" placeholder="—"> <label>ROI To %</label><input type="number" class="rule-excl-roi-to" data-rule-id="' + id + '" value="' + (ex.roi_to ?? '') + '" placeholder="—"></div>' +
+            '<div class="rule-excl-row"><label>Min Profit $</label><input type="number" class="rule-excl-profit-from" data-rule-id="' + id + '" value="' + (ex.profit_from ?? '') + '" placeholder="—"> <label>Profit $ to</label><input type="number" class="rule-excl-profit-to" data-rule-id="' + id + '" value="' + (ex.profit_to ?? '') + '" placeholder="—"></div>' +
+            '<div class="rule-excl-row"><label>Rake floor $</label><input type="number" class="rule-excl-rake-floor" data-rule-id="' + id + '" value="' + (ex.rake_floor ?? '') + '" placeholder="—"></div>' +
+            '</div>' +
+            '<div class="rule-dynamic-desc" id="rule-desc-' + id + '" aria-live="polite"></div>' +
+            '<button type="button" class="btn btn-primary rule-save" data-rule-id="' + id + '">Save this rule</button>' +
+            '</div>';
+        return div;
+    }
+
+    function getParamsForRule(ruleId) {
+        var params = {};
+        document.querySelectorAll('.rule-param-input[data-rule-id="' + ruleId + '"]').forEach(function(inp) {
+            var k = inp.dataset.key;
+            var v = inp.value.trim();
+            params[k] = v !== '' ? (Number(v) || v) : '';
+        });
+        var r = configs.find(function(c) { return c.rule_id === ruleId; });
+        if (r && r.parameters) {
+            Object.keys(r.parameters).forEach(function(k) {
+                if (params[k] === undefined || params[k] === '') params[k] = r.parameters[k];
+            });
+        }
+        return params;
+    }
+
+    function getExclusionSummary(ruleId) {
+        var minH = numVal('.rule-excl-min-hands[data-rule-id="' + ruleId + '"]');
+        var roiFrom = numVal('.rule-excl-roi-from[data-rule-id="' + ruleId + '"]');
+        var roiTo = numVal('.rule-excl-roi-to[data-rule-id="' + ruleId + '"]');
+        var profitFrom = numVal('.rule-excl-profit-from[data-rule-id="' + ruleId + '"]');
+        var profitTo = numVal('.rule-excl-profit-to[data-rule-id="' + ruleId + '"]');
+        var rakeFloor = numVal('.rule-excl-rake-floor[data-rule-id="' + ruleId + '"]');
+        var parts = [];
+        if (minH != null) parts.push('Min hands: ' + minH);
+        if (roiFrom != null || roiTo != null) parts.push('ROI: ' + (roiFrom ?? '—') + '% to ' + (roiTo ?? '—') + '%');
+        if (profitFrom != null || profitTo != null) parts.push('Profit: $' + (profitFrom ?? '—') + ' to $' + (profitTo ?? '—'));
+        if (rakeFloor != null) parts.push('Rake floor: $' + rakeFloor);
+        return parts.length ? ' Exclusions: ' + parts.join('; ') + '.' : '';
+    }
+
+    function substituteTemplate(template, params) {
+        if (!template || typeof template !== 'string') return '';
+        return template.replace(/\{(\w+)\}/g, function(_, key) {
+            var val = params[key];
+            return (val !== undefined && val !== null && val !== '') ? String(val) : '';
+        });
+    }
+
+    function updateDynamicDescription(ruleId) {
+        var el = document.getElementById('rule-desc-' + ruleId);
+        if (!el) return;
+        var r = configs.find(function(c) { return c.rule_id === ruleId; });
+        var template = (r && (r.dynamic_description || r.description_template)) || '';
+        var params = getParamsForRule(ruleId);
+        var text = substituteTemplate(template, params);
+        var excl = getExclusionSummary(ruleId);
+        el.textContent = text ? (text + excl) : ('No description.' + excl);
+    }
+
+    function escapeHtml(s) {
+        if (s == null) return '';
+        var div = document.createElement('div');
+        div.textContent = s;
+        return div.innerHTML;
+    }
+
+    function bindRule(rule, el) {
+        var id = rule.rule_id;
+        var params = rule.parameters || {};
+        var paramKeys = Object.keys(params);
+        var paramsContainer = document.getElementById('rule-params-' + id);
+        if (paramsContainer) {
+            paramKeys.forEach(function(key) {
+                var label = document.createElement('label');
+                label.className = 'rule-param';
+                label.innerHTML = '<span>' + escapeHtml(paramLabel(key)) + '</span><input type="number" step="any" class="rule-param-input" data-rule-id="' + id + '" data-key="' + escapeHtml(key) + '" value="' + (params[key] ?? '') + '">';
+                paramsContainer.appendChild(label);
+            });
+            paramsContainer.querySelectorAll('.rule-param-input').forEach(function(inp) {
+                inp.addEventListener('input', function() { updateDynamicDescription(id); });
+                inp.addEventListener('change', function() { updateDynamicDescription(id); });
+            });
+        }
+
+        var weightInp = el.querySelector('.rule-weight-input');
+        if (weightInp) {
+            weightInp.addEventListener('change', function() {
+                var scoreSpan = el.querySelector('.rule-header-score');
+                if (scoreSpan) scoreSpan.textContent = 'Score: ' + (this.value.trim() || '50');
+            });
+        }
+        var exclPanel = document.getElementById('rule-excl-' + id);
+        if (exclPanel) {
+            exclPanel.querySelectorAll('input').forEach(function(inp) {
+                inp.addEventListener('input', function() { updateDynamicDescription(id); });
+                inp.addEventListener('change', function() { updateDynamicDescription(id); });
+            });
+        }
+        updateDynamicDescription(id);
+
+        el.querySelector('.rule-accordion-header').addEventListener('click', function() { toggleOpen(id); });
+        el.querySelector('.rule-active-cb').addEventListener('change', function() {
+            var r = configs.find(function(c) { return c.rule_id === id; });
+            if (r) r.active = r.is_active = this.checked;
+        });
+        el.querySelectorAll('.rule-tab').forEach(function(tab) {
+            tab.addEventListener('click', function() {
+                el.querySelectorAll('.rule-tab').forEach(function(t) { t.classList.remove('active'); });
+                el.querySelectorAll('.rule-tab-content').forEach(function(c) { c.classList.remove('active'); });
+                tab.classList.add('active');
+                var panel = document.getElementById('rule-' + tab.dataset.tab + '-' + id);
+                if (panel) { panel.classList.add('active'); panel.style.display = 'block'; }
+                var otherTab = tab.dataset.tab === 'logic' ? 'excl' : 'logic';
+                var otherPanel = document.getElementById('rule-' + otherTab + '-' + id);
+                if (otherPanel) { otherPanel.classList.remove('active'); otherPanel.style.display = 'none'; }
+            });
+        });
+        el.querySelector('.rule-save').addEventListener('click', function() { saveOne(id); });
+    }
+
+    function getConfigPayload() {
+        return configs.map(function(r) {
+            var id = r.rule_id;
+            var params = Object.assign({}, r.parameters);
+            var paramInputs = document.querySelectorAll('.rule-param-input[data-rule-id="' + id + '"]');
+            paramInputs.forEach(function(inp) {
+                var key = inp.dataset.key;
+                var v = inp.value.trim();
+                if (v !== '') params[key] = Number(v);
+            });
+            var excl = {
+                min_hands: numVal('.rule-excl-min-hands[data-rule-id="' + id + '"]'),
+                roi_from: numVal('.rule-excl-roi-from[data-rule-id="' + id + '"]'),
+                roi_to: numVal('.rule-excl-roi-to[data-rule-id="' + id + '"]'),
+                profit_from: numVal('.rule-excl-profit-from[data-rule-id="' + id + '"]'),
+                profit_to: numVal('.rule-excl-profit-to[data-rule-id="' + id + '"]'),
+                rake_floor: numVal('.rule-excl-rake-floor[data-rule-id="' + id + '"]')
+            };
+            var roiRange = (excl.roi_from != null || excl.roi_to != null) ? { from: excl.roi_from, to: excl.roi_to } : undefined;
+            var profitRange = (excl.profit_from != null || excl.profit_to != null) ? { from: excl.profit_from, to: excl.profit_to } : undefined;
+            var weightEl = document.querySelector('.rule-weight-input[data-rule-id="' + id + '"]');
+            var weight = weightEl && weightEl.value.trim() !== '' ? Number(weightEl.value) : null;
+            if (weight !== null && isNaN(weight)) weight = null;
+            var payload = {
+                rule_id: id,
+                active: document.querySelector('.rule-active-cb[data-rule-id="' + id + '"]')?.checked !== false,
+                parameters: params,
+                exclusions: { min_hands: excl.min_hands, roi_range: roiRange, profit_range: profitRange, rake_floor: excl.rake_floor }
+            };
+            if (weight !== null) payload.weight = weight;
+            return payload;
+        });
+    }
+    function numVal(sel) {
+        var el = document.querySelector(sel);
+        if (!el) return null;
+        var v = el.value.trim();
+        if (v === '') return null;
+        var n = Number(v);
+        return isNaN(n) ? null : n;
+    }
+
+    function saveOne(ruleId) {
+        var payload = getConfigPayload().filter(function(c) { return c.rule_id === ruleId; });
+        if (!payload.length) return;
+        saveConfigs(payload);
+    }
+
+    function showSuccess() {
+        var errEl = document.getElementById('rulesError');
+        var okEl = document.getElementById('rulesSuccess');
+        errEl.style.display = 'none';
+        okEl.style.display = 'block';
+        setTimeout(function() { okEl.style.display = 'none'; }, 4000);
+    }
+    function saveConfigs(payload) {
+        document.getElementById('rulesError').style.display = 'none';
+        fetch('/api/rules', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ configs: payload })
+        }).then(function(res) {
+            if (!res.ok) return res.json().then(function(d) { throw new Error(d.error || 'Save failed'); });
+            return res.json();
+        }).then(function(list) {
+            configs = Array.isArray(list) ? list : [];
+            document.getElementById('btnSaveAll').textContent = 'Save all rules';
+            showSuccess();
+        }).catch(function(err) {
+            document.getElementById('rulesError').style.display = 'block';
+            document.getElementById('rulesError').textContent = err.message || 'Failed to save. Try again.';
+        });
+    }
+
+    function saveAll() {
+        var btn = document.getElementById('btnSaveAll');
+        btn.textContent = 'Saving…';
+        btn.disabled = true;
+        var payload = getConfigPayload();
+        fetch('/api/rules', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ configs: payload })
+        }).then(function(res) {
+            if (!res.ok) return res.json().then(function(d) { throw new Error(d.error || 'Save failed'); });
+            return res.json();
+        }).then(function(list) {
+            configs = Array.isArray(list) ? list : [];
+            btn.textContent = 'Save all rules';
+            btn.disabled = false;
+            showSuccess();
+        }).catch(function(err) {
+            document.getElementById('rulesError').style.display = 'block';
+            document.getElementById('rulesError').textContent = err.message || 'Failed to save. Try again.';
+            btn.textContent = 'Save all rules';
+            btn.disabled = false;
+        });
+    }
+
+    fetch('/api/rules')
+        .then(function(res) {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.json();
+        })
+        .then(function(list) {
+            configs = Array.isArray(list) ? list : [];
+            document.getElementById('rulesLoading').style.display = 'none';
+            document.getElementById('rulesContent').style.display = 'block';
+            var listEl = document.getElementById('rulesList');
+            listEl.innerHTML = '';
+            configs.forEach(function(rule) {
+                var el = renderRule(rule);
+                listEl.appendChild(el);
+                bindRule(rule, el);
+            });
+            document.getElementById('btnSaveAll').addEventListener('click', saveAll);
+        })
+        .catch(function(err) {
+            document.getElementById('rulesLoading').style.display = 'none';
+            document.getElementById('rulesError').style.display = 'block';
+            document.getElementById('rulesError').textContent = err.message || 'Failed to load rules.';
+        });
+})();
+    </script>
+</body>
+</html>

@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# Node / frontend build
+node_modules/
+static/dist/
+
+# Environment & secrets
+.env
+backend_v2/.env
+
+# Logs & local runtime state
+*.log
+data/*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+
+# Sensitive / private data — must NOT be published
+# Raw source data exports (re-importable into the warehouse)
+data/source_csvs/
+# Case-management database and local app/runtime state (may contain player data)
+*.db
+data/gi_cases.db
+data/app_data.json
+data/ews_table_schema.json
+# Uploaded case attachments / evidence files
+uploads/

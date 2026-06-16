@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fraud Engine 2026 — How It Works &amp; Detection Rules</title>
+</head>
+<body style="margin:0; padding:0; background-color:#eef1f5; font-family:Segoe UI, Roboto, Helvetica, Arial, sans-serif; color:#1f2733; -webkit-font-smoothing:antialiased;">
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#eef1f5; padding:24px 0;">
+<tr>
+<td align="center">
+
+<table role="presentation" width="700" cellpadding="0" cellspacing="0" style="width:700px; max-width:700px; background-color:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 1px 4px rgba(15,23,42,0.08);">
+
+  <!-- Header -->
+  <tr>
+    <td style="background-color:#0f2742; padding:28px 36px;">
+      <div style="color:#ffffff; font-size:21px; font-weight:600; letter-spacing:0.2px;">Fraud Engine 2026</div>
+      <div style="color:#8fb0d6; font-size:14px; margin-top:4px;">How the system works &mdash; data pipeline &amp; detection rules</div>
+    </td>
+  </tr>
+
+  <!-- Intro -->
+  <tr>
+    <td style="padding:26px 36px 4px 36px;">
+      <p style="margin:0; font-size:14px; line-height:1.6; color:#3b4658;">
+        The platform runs as an automated cycle: it <strong>imports the latest game data on a schedule</strong>,
+        <strong>runs the fraud rules</strong> against it, <strong>builds an investigation case</strong> for any player
+        that matches, and <strong>saves that case to a separate database</strong> where it is timestamped and tracked.
+        This document explains that pipeline, then breaks down each of the five rules with examples.
+      </p>
+    </td>
+  </tr>
+
+  <!-- ============ PIPELINE ============ -->
+  <tr><td style="padding:24px 36px 0 36px;">
+    <div style="font-size:15px; font-weight:700; color:#0f2742; border-bottom:2px solid #e2e8f0; padding-bottom:8px;">The end-to-end pipeline</div>
+  </td></tr>
+
+  <!-- Step 1 -->
+  <tr><td style="padding:16px 36px 0 36px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td valign="top" width="46" style="padding-top:2px;">
+          <div style="width:34px; height:34px; background-color:#1f6feb; color:#ffffff; border-radius:50%; text-align:center; line-height:34px; font-size:15px; font-weight:700;">1</div>
+        </td>
+        <td valign="top" style="padding-left:6px;">
+          <div style="font-size:14.5px; font-weight:600; color:#1f2733;">Scheduled data export (API &rarr; database)</div>
+          <p style="margin:5px 0 0 0; font-size:13px; line-height:1.6; color:#3b4658;">
+            On a set cycle, the <strong>scheduler</strong> calls the provider's reporting <strong>API</strong>, downloads the latest
+            reports, and imports them into the <strong>data warehouse</strong> &mdash; the source tables that hold accounts,
+            cash sessions, and tournament results.
+          </p>
+          <div style="margin-top:7px; font-size:12px; line-height:1.5; color:#5a6472; background-color:#f3f6fa; border-radius:6px; padding:8px 11px;">
+            <strong>Example:</strong> every night the scheduler pulls "Account Information", "Cash Table Summary" and
+            "SNG / Twister / MTT" reports and loads the new rows into the warehouse.
+          </div>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+
+  <!-- Step 2 -->
+  <tr><td style="padding:16px 36px 0 36px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td valign="top" width="46" style="padding-top:2px;">
+          <div style="width:34px; height:34px; background-color:#1f6feb; color:#ffffff; border-radius:50%; text-align:center; line-height:34px; font-size:15px; font-weight:700;">2</div>
+        </td>
+        <td valign="top" style="padding-left:6px;">
+          <div style="font-size:14.5px; font-weight:600; color:#1f2733;">Scheduled rule cycle (the scan)</div>
+          <p style="margin:5px 0 0 0; font-size:13px; line-height:1.6; color:#3b4658;">
+            Each scan cycle, the engine loads the <strong>active rules and their thresholds</strong>, then runs
+            <strong>Rules 1&ndash;5 in sequence</strong> against the freshly imported data. Only rules switched on in the
+            settings screen are evaluated.
+          </p>
+          <div style="margin-top:7px; font-size:12px; line-height:1.5; color:#5a6472; background-color:#f3f6fa; border-radius:6px; padding:8px 11px;">
+            <strong>Example:</strong> the cycle starts, confirms Rules 1&ndash;5 are enabled, and begins testing every player
+            against each rule's criteria.
+          </div>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+
+  <!-- Step 3 -->
+  <tr><td style="padding:16px 36px 0 36px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td valign="top" width="46" style="padding-top:2px;">
+          <div style="width:34px; height:34px; background-color:#1f6feb; color:#ffffff; border-radius:50%; text-align:center; line-height:34px; font-size:15px; font-weight:700;">3</div>
+        </td>
+        <td valign="top" style="padding-left:6px;">
+          <div style="font-size:14.5px; font-weight:600; color:#1f2733;">Build the case (pull supporting data)</div>
+          <p style="margin:5px 0 0 0; font-size:13px; line-height:1.6; color:#3b4658;">
+            When a rule matches a player, the engine <strong>pulls that player's supporting detail</strong> from the warehouse
+            &mdash; profile, financials (profit, ROI, rake), playing partners and recent sessions &mdash; and assembles a full
+            case with a <strong>risk score</strong>, a <strong>category</strong>, a <strong>tag</strong>, and a plain-English
+            <strong>reason</strong> explaining why it fired.
+          </p>
+          <div style="margin-top:7px; font-size:12px; line-height:1.5; color:#5a6472; background-color:#f3f6fa; border-radius:6px; padding:8px 11px;">
+            <strong>Example:</strong> Rule 1 flags a player; the engine then attaches their lifetime profit, rake, win rates
+            and top partners so an analyst sees the whole picture in one place.
+          </div>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+
+  <!-- Step 4 -->
+  <tr><td style="padding:16px 36px 0 36px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td valign="top" width="46" style="padding-top:2px;">
+          <div style="width:34px; height:34px; background-color:#16a34a; color:#ffffff; border-radius:50%; text-align:center; line-height:34px; font-size:15px; font-weight:700;">4</div>
+        </td>
+        <td valign="top" style="padding-left:6px;">
+          <div style="font-size:14.5px; font-weight:600; color:#1f2733;">Save &amp; timestamp (separate case database)</div>
+          <p style="margin:5px 0 0 0; font-size:13px; line-height:1.6; color:#3b4658;">
+            The finished case is written to a <strong>separate case-management database</strong> &mdash; distinct from the raw
+            game-data warehouse. There it is <strong>timestamped</strong> (created and last-updated) and tracked through its
+            investigation status. If a later cycle re-flags the same player, the engine <strong>updates the existing open
+            case</strong> instead of creating a duplicate.
+          </p>
+          <div style="margin-top:7px; font-size:12px; line-height:1.5; color:#5a6472; background-color:#eafaf0; border-radius:6px; padding:8px 11px;">
+            <strong>Example:</strong> the case is stored as "#1043 &mdash; Open, created 14 Jun 02:10", giving a permanent,
+            time-stamped audit trail separate from the source data.
+          </div>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+
+  <!-- Two databases callout -->
+  <tr><td style="padding:18px 36px 0 36px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr><td style="background-color:#f4fafb; border:1px solid #d4e9ed; border-radius:8px; padding:14px 16px;">
+        <div style="font-size:12.5px; line-height:1.6; color:#33505a;">
+          <strong>Why two databases?</strong> The <strong>warehouse</strong> holds raw, re-importable game data and is refreshed
+          every cycle. The <strong>case database</strong> is the system of record for investigations &mdash; it preserves each
+          case and its timestamps even as the underlying data is refreshed, so findings are never overwritten.
+        </div>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <!-- ============ RULES HEADER ============ -->
+  <tr><td style="padding:30px 36px 0 36px;">
+    <div style="font-size:15px; font-weight:700; color:#0f2742; border-bottom:2px solid #e2e8f0; padding-bottom:8px;">The five detection rules</div>
+    <p style="margin:12px 0 0 0; font-size:13px; line-height:1.6; color:#3b4658;">
+      Each rule targets a different collusion or fraud signature. Defaults shown below are configurable in the settings screen.
+    </p>
+  </td></tr>
+
+  <!-- ============ RULE 1 ============ -->
+  <tr><td style="padding:18px 36px 0 36px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e6ebf2; border-left:4px solid #b23b3b; border-radius:8px;">
+      <tr><td style="padding:18px 20px;">
+        <span style="display:inline-block; background-color:#fbe9e9; color:#b23b3b; font-size:11px; font-weight:700; letter-spacing:0.5px; padding:4px 9px; border-radius:20px; text-transform:uppercase;">Rule 1 &middot; Chip Dumping</span>
+        <div style="font-size:16px; font-weight:600; margin-top:12px; color:#1f2733;">Cash margin &mdash; new account</div>
+
+        <p style="margin:10px 0 0 0; font-size:13.5px; line-height:1.6; color:#3b4658;">
+          <strong>The area:</strong> In fair cash poker a player's profit is only a tiny slice of the money they wager
+          (about &minus;2% to +3%). Winning a <em>large</em> percentage of total bets signals a partner deliberately
+          losing chips to them &mdash; chip dumping.
+        </p>
+        <p style="margin:10px 0 0 0; font-size:13.5px; line-height:1.6; color:#3b4658;">
+          <strong>How it flags:</strong> margin = total profit &divide; total bets &times; 100. Flag when margin &ge;
+          <strong>50%</strong> <em>and</em> total bets &ge; <strong>100</strong>.
+        </p>
+
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:12.5px; margin-top:14px;">
+          <tr style="background-color:#f7f9fc;">
+            <th align="left"  style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">Player</th>
+            <th align="right" style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">Profit</th>
+            <th align="right" style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">Bets</th>
+            <th align="right" style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">Margin</th>
+            <th align="left"  style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">Outcome</th>
+          </tr>
+          <tr>
+            <td style="padding:8px 10px; border-bottom:1px solid #eef1f5;">A</td>
+            <td align="right" style="padding:8px 10px; border-bottom:1px solid #eef1f5;">8,000</td>
+            <td align="right" style="padding:8px 10px; border-bottom:1px solid #eef1f5;">10,000</td>
+            <td align="right" style="padding:8px 10px; border-bottom:1px solid #eef1f5;">80%</td>
+            <td style="padding:8px 10px; border-bottom:1px solid #eef1f5; color:#b23b3b; font-weight:600;">Flagged</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 10px; border-bottom:1px solid #eef1f5;">B</td>
+            <td align="right" style="padding:8px 10px; border-bottom:1px solid #eef1f5;">90</td>
+            <td align="right" style="padding:8px 10px; border-bottom:1px solid #eef1f5;">60</td>
+            <td align="right" style="padding:8px 10px; border-bottom:1px solid #eef1f5;">150%</td>
+            <td style="padding:8px 10px; border-bottom:1px solid #eef1f5; color:#5a6472;">Clear &mdash; bets below 100</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 10px;">C</td>
+            <td align="right" style="padding:8px 10px;">200</td>
+            <td align="right" style="padding:8px 10px;">10,000</td>
+            <td align="right" style="padding:8px 10px;">2%</td>
+            <td style="padding:8px 10px; color:#5a6472;">Clear &mdash; normal margin</td>
+          </tr>
+        </table>
+        <div style="margin-top:12px; font-size:11.5px; line-height:1.5; color:#7a8496; background-color:#fafbfd; border-radius:6px; padding:9px 11px;">
+          <strong>Case reason produced:</strong> &ldquo;Rule 1 [Cash]: Cash margin 80.00% (floor 50.0%) &mdash; &Sigma; profit &divide; &Sigma; bets; &Sigma; bets 10,000 (min 100).&rdquo;
+        </div>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <!-- ============ RULE 2 ============ -->
+  <tr><td style="padding:18px 36px 0 36px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e6ebf2; border-left:4px solid #6d4bb2; border-radius:8px;">
+      <tr><td style="padding:18px 20px;">
+        <span style="display:inline-block; background-color:#f0ebf9; color:#6d4bb2; font-size:11px; font-weight:700; letter-spacing:0.5px; padding:4px 9px; border-radius:20px; text-transform:uppercase;">Rule 2 &middot; New Account High Win</span>
+        <div style="font-size:16px; font-weight:600; margin-top:12px; color:#1f2733;">Major income &mdash; &ldquo;% Win&rdquo; spike</div>
+
+        <p style="margin:10px 0 0 0; font-size:13.5px; line-height:1.6; color:#3b4658;">
+          <strong>The area:</strong> A days-old account that instantly books a huge return is a hallmark of a
+          <em>receiver account</em> &mdash; value funnelled into a fresh identity, or bonus/jackpot abuse.
+        </p>
+        <p style="margin:10px 0 0 0; font-size:13.5px; line-height:1.6; color:#3b4658;">
+          <strong>How it flags:</strong> account signed up <strong>&le; 2 days</strong> ago <em>and</em> a session shows
+          <strong>&gt; 500%</strong> win <em>and</em> the win is <strong>&ge; 50</strong> in value.
+        </p>
+
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:12.5px; margin-top:14px;">
+          <tr style="background-color:#f7f9fc;">
+            <th align="left"  style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">Player</th>
+            <th align="right" style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">Account age</th>
+            <th align="right" style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">% Win</th>
+            <th align="right" style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">Win value</th>
+            <th align="left"  style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">Outcome</th>
+          </tr>
+          <tr>
+            <td style="padding:8px 10px; border-bottom:1px solid #eef1f5;">A</td>
+            <td align="right" style="padding:8px 10px; border-bottom:1px solid #eef1f5;">1 day</td>
+            <td align="right" style="padding:8px 10px; border-bottom:1px solid #eef1f5;">1,200%</td>
+            <td align="right" style="padding:8px 10px; border-bottom:1px solid #eef1f5;">300</td>
+            <td style="padding:8px 10px; border-bottom:1px solid #eef1f5; color:#6d4bb2; font-weight:600;">Flagged</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 10px; border-bottom:1px solid #eef1f5;">B</td>
+            <td align="right" style="padding:8px 10px; border-bottom:1px solid #eef1f5;">10 days</td>
+            <td align="right" style="padding:8px 10px; border-bottom:1px solid #eef1f5;">1,200%</td>
+            <td align="right" style="padding:8px 10px; border-bottom:1px solid #eef1f5;">300</td>
+            <td style="padding:8px 10px; border-bottom:1px solid #eef1f5; color:#5a6472;">Clear &mdash; account too old</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 10px;">C</td>
+            <td align="right" style="padding:8px 10px;">1 day</td>
+            <td align="right" style="padding:8px 10px;">1,200%</td>
+            <td align="right" style="padding:8px 10px;">20</td>
+            <td style="padding:8px 10px; color:#5a6472;">Clear &mdash; win value too small</td>
+          </tr>
+        </table>
+        <div style="margin-top:12px; font-size:11.5px; line-height:1.5; color:#7a8496; background-color:#fafbfd; border-radius:6px; padding:9px 11px;">
+          <strong>Case reason produced:</strong> &ldquo;Rule 2 [Major]: &lsquo;% Win&rsquo; 1200.00% (floor 500.0%), Win 300.00 (min 50.0), Buy 25.00; signup &le; 2d.&rdquo;
+        </div>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <!-- ============ COMMON GAMES INTRO ============ -->
+  <tr><td style="padding:24px 36px 0 36px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr><td style="background-color:#e6f3f5; border-radius:8px; padding:14px 16px;">
+        <div style="font-size:13px; font-weight:700; color:#1f7a8c; margin-bottom:4px;">Rules 3&ndash;5 &middot; Common Games (shared tournaments)</div>
+        <div style="font-size:12.5px; line-height:1.6; color:#33505a;">
+          These three rules use the <strong>same idea</strong> across three tournament formats: two players who keep entering the
+          <em>same</em> tournaments far more than chance allows are likely a <strong>collusion team</strong> sharing a table.
+          A pair must share <strong>&ge; 5</strong> tournaments and reach <strong>30% overlap</strong> (shared &divide; that
+          player's total in the format). The only difference is whether <em>both</em> or <em>either</em> player must hit 30%.
+        </div>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <!-- ============ RULE 3 ============ -->
+  <tr><td style="padding:18px 36px 0 36px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e6ebf2; border-left:4px solid #1f7a8c; border-radius:8px;">
+      <tr><td style="padding:18px 20px;">
+        <span style="display:inline-block; background-color:#e6f3f5; color:#1f7a8c; font-size:11px; font-weight:700; letter-spacing:0.5px; padding:4px 9px; border-radius:20px; text-transform:uppercase;">Rule 3 &middot; Common Games</span>
+        <div style="font-size:16px; font-weight:600; margin-top:12px; color:#1f2733;">Twister overlap &mdash; <span style="color:#1f7a8c;">both</span> players must be concentrated</div>
+
+        <p style="margin:10px 0 0 0; font-size:13.5px; line-height:1.6; color:#3b4658;">
+          <strong>The area:</strong> Twisters are tiny (a handful of players per game), so coincidental overlap is common.
+          To avoid false alarms, Rule 3 only fires when <strong>both</strong> players are heavily concentrated on each other &mdash;
+          a strong sign they are deliberately joining the same games.
+        </p>
+
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:12.5px; margin-top:14px;">
+          <tr style="background-color:#f7f9fc;">
+            <th align="left"  style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">Scenario</th>
+            <th align="right" style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">Shared</th>
+            <th align="right" style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">A overlap</th>
+            <th align="right" style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">B overlap</th>
+            <th align="left"  style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">Outcome</th>
+          </tr>
+          <tr>
+            <td style="padding:8px 10px; border-bottom:1px solid #eef1f5;">A=12, B=8</td>
+            <td align="right" style="padding:8px 10px; border-bottom:1px solid #eef1f5;">6</td>
+            <td align="right" style="padding:8px 10px; border-bottom:1px solid #eef1f5;">50%</td>
+            <td align="right" style="padding:8px 10px; border-bottom:1px solid #eef1f5;">75%</td>
+            <td style="padding:8px 10px; border-bottom:1px solid #eef1f5; color:#1f7a8c; font-weight:600;">Flagged &mdash; both &ge; 30%</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 10px;">A=12, B=100</td>
+            <td align="right" style="padding:8px 10px;">6</td>
+            <td align="right" style="padding:8px 10px;">50%</td>
+            <td align="right" style="padding:8px 10px;">6%</td>
+            <td style="padding:8px 10px; color:#5a6472;">Clear &mdash; B below 30%</td>
+          </tr>
+        </table>
+        <div style="margin-top:12px; font-size:11.5px; line-height:1.5; color:#7a8496; background-color:#fafbfd; border-radius:6px; padding:9px 11px;">
+          <strong>Reads as:</strong> Player A shared 6 of their 12 Twisters with Player B, who shared the same 6 of just 8 &mdash;
+          both are overwhelmingly playing each other.
+        </div>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <!-- ============ RULE 4 ============ -->
+  <tr><td style="padding:18px 36px 0 36px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e6ebf2; border-left:4px solid #1f7a8c; border-radius:8px;">
+      <tr><td style="padding:18px 20px;">
+        <span style="display:inline-block; background-color:#e6f3f5; color:#1f7a8c; font-size:11px; font-weight:700; letter-spacing:0.5px; padding:4px 9px; border-radius:20px; text-transform:uppercase;">Rule 4 &middot; Common Games</span>
+        <div style="font-size:16px; font-weight:600; margin-top:12px; color:#1f2733;">MTT overlap &mdash; <span style="color:#1f7a8c;">either</span> player concentrated</div>
+
+        <p style="margin:10px 0 0 0; font-size:13.5px; line-height:1.6; color:#3b4658;">
+          <strong>The area:</strong> Multi-table tournaments have large fields, so a high-volume grinder can have a low overlap %
+          even while a colluder shadows them. Rule 4 therefore fires if <strong>either</strong> player crosses 30% &mdash;
+          catching the low-volume account that almost only plays the target's games.
+        </p>
+
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:12.5px; margin-top:14px;">
+          <tr style="background-color:#f7f9fc;">
+            <th align="left"  style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">Scenario</th>
+            <th align="right" style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">Shared</th>
+            <th align="right" style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">A overlap</th>
+            <th align="right" style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">B overlap</th>
+            <th align="left"  style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">Outcome</th>
+          </tr>
+          <tr>
+            <td style="padding:8px 10px; border-bottom:1px solid #eef1f5;">A=40, B=5</td>
+            <td align="right" style="padding:8px 10px; border-bottom:1px solid #eef1f5;">5</td>
+            <td align="right" style="padding:8px 10px; border-bottom:1px solid #eef1f5;">12.5%</td>
+            <td align="right" style="padding:8px 10px; border-bottom:1px solid #eef1f5;">100%</td>
+            <td style="padding:8px 10px; border-bottom:1px solid #eef1f5; color:#1f7a8c; font-weight:600;">Flagged &mdash; B &ge; 30%</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 10px;">A=40, B=60</td>
+            <td align="right" style="padding:8px 10px;">5</td>
+            <td align="right" style="padding:8px 10px;">12.5%</td>
+            <td align="right" style="padding:8px 10px;">8.3%</td>
+            <td style="padding:8px 10px; color:#5a6472;">Clear &mdash; neither &ge; 30%</td>
+          </tr>
+        </table>
+        <div style="margin-top:12px; font-size:11.5px; line-height:1.5; color:#7a8496; background-color:#fafbfd; border-radius:6px; padding:9px 11px;">
+          <strong>Reads as:</strong> Player A is a high-volume grinder (40 MTTs); Player B has played 5 MTTs &mdash; all 5 alongside A.
+          A alone looks innocent, but B exists almost entirely to play A's games.
+        </div>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <!-- ============ RULE 5 ============ -->
+  <tr><td style="padding:18px 36px 0 36px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e6ebf2; border-left:4px solid #1f7a8c; border-radius:8px;">
+      <tr><td style="padding:18px 20px;">
+        <span style="display:inline-block; background-color:#e6f3f5; color:#1f7a8c; font-size:11px; font-weight:700; letter-spacing:0.5px; padding:4px 9px; border-radius:20px; text-transform:uppercase;">Rule 5 &middot; Common Games</span>
+        <div style="font-size:16px; font-weight:600; margin-top:12px; color:#1f2733;">SNG overlap &mdash; <span style="color:#1f7a8c;">either</span> player concentrated</div>
+
+        <p style="margin:10px 0 0 0; font-size:13.5px; line-height:1.6; color:#3b4658;">
+          <strong>The area:</strong> Sit &amp; Go tournaments fill on demand, making it easy for two accounts to repeatedly land in
+          the same game. As with MTTs, Rule 5 fires if <strong>either</strong> player's overlap reaches 30%.
+        </p>
+
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:12.5px; margin-top:14px;">
+          <tr style="background-color:#f7f9fc;">
+            <th align="left"  style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">Scenario</th>
+            <th align="right" style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">Shared</th>
+            <th align="right" style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">A overlap</th>
+            <th align="right" style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">B overlap</th>
+            <th align="left"  style="padding:8px 10px; color:#56627a; border-bottom:1px solid #e2e8f0;">Outcome</th>
+          </tr>
+          <tr>
+            <td style="padding:8px 10px; border-bottom:1px solid #eef1f5;">A=30, B=10</td>
+            <td align="right" style="padding:8px 10px; border-bottom:1px solid #eef1f5;">8</td>
+            <td align="right" style="padding:8px 10px; border-bottom:1px solid #eef1f5;">26.7%</td>
+            <td align="right" style="padding:8px 10px; border-bottom:1px solid #eef1f5;">80%</td>
+            <td style="padding:8px 10px; border-bottom:1px solid #eef1f5; color:#1f7a8c; font-weight:600;">Flagged &mdash; B &ge; 30%</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 10px;">A=30, B=10</td>
+            <td align="right" style="padding:8px 10px;">3</td>
+            <td align="right" style="padding:8px 10px;">10%</td>
+            <td align="right" style="padding:8px 10px;">30%</td>
+            <td style="padding:8px 10px; color:#5a6472;">Clear &mdash; shared below 5</td>
+          </tr>
+        </table>
+        <div style="margin-top:12px; font-size:11.5px; line-height:1.5; color:#7a8496; background-color:#fafbfd; border-radius:6px; padding:9px 11px;">
+          <strong>Reads as:</strong> 8 shared SNGs clears the &ldquo;at least 5&rdquo; floor, and Player B played 8 of their 10 SNGs with
+          Player A (80%) &mdash; flagged. In the second row only 3 are shared, so it never qualifies regardless of overlap %.
+        </div>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <!-- Scoring note -->
+  <tr><td style="padding:24px 36px 0 36px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr><td style="background-color:#0f2742; border-radius:8px; padding:16px 20px;">
+        <div style="color:#ffffff; font-size:13px; font-weight:600; margin-bottom:6px;">How a case is scored</div>
+        <div style="color:#bcd0e6; font-size:12.5px; line-height:1.6;">
+          Each rule a player breaks adds points to their <strong>risk score</strong> (35 points each by default).
+          A case is promoted for analyst review once the score reaches the <strong>minimum trigger (100)</strong> &mdash;
+          so a player usually needs more than one signal to surface. Every threshold is adjustable in the rule-settings screen.
+        </div>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <!-- Footer -->
+  <tr>
+    <td style="padding:22px 36px 30px 36px;">
+      <hr style="border:none; border-top:1px solid #e6ebf2; margin:0 0 14px 0;">
+      <div style="font-size:11.5px; color:#8a94a6; line-height:1.5;">
+        Fraud Engine 2026 &mdash; pipeline &amp; detection rules summary. Thresholds shown are current defaults and are
+        configurable. For full technical detail (data sources, SQL, scoring internals) see the engineering documentation.
+      </div>
+    </td>
+  </tr>
+
+</table>
+
+</td>
+</tr>
+</table>
+
+</body>
+</html>

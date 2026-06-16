@@ -1,0 +1,30 @@
+{
+  "name": "report-manager",
+  "version": "1.0.0",
+  "description": "Poker Investigation Case Management System",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "watch": "vite build --watch",
+    "validate:py": "python -m py_compile backend_v2/engine/fraud_engine.py backend_v2/engine/fraud_rule_db_loader.py backend_v2/api/routes_fraud.py backend_v2/service_fraud.py backend_v2/engine/fraud_rule_config_schema.py",
+    "validate": "npm run build && npm run validate:py"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/material": "^7.3.9",
+    "chart.js": "^4.4.1",
+    "dom-helpers": "^5.2.1",
+    "react": "^18.2.0",
+    "react-chartjs-2": "^5.2.0",
+    "react-dom": "^18.2.0",
+    "recharts": "^3.7.0",
+    "socket.io-client": "^4.5.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "vite": "^7.3.1"
+  }
+}
