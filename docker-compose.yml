@@ -1,0 +1,74 @@
+# Fraud Engine 2026 — full stack in containers.
+#
+#   docker compose up --build
+#
+# Then open http://localhost:5001 (Fraud Engine UI). The Reports API is on
+# http://localhost:5000. Configuration comes from a local .env file — copy
+# .env.docker.example to .env first (the defaults below work out of the box).
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-Cookies01!}
+      POSTGRES_DB: ${POSTGRES_DB:-game_integrity}
+    ports:
+      # Exposed so you can connect a SQL client from the host if you want.
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-game_integrity}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  fraud:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fraud-engine-2026
+    command: ["python", "-m", "backend_v2.service_fraud"]
+    environment:
+      # CASE_MANAGEMENT_URL / COLLUSION_DB_URL fall back to this in config.py
+      # when unset, so we only set the one URL here.
+      DEFAULT_DB_CONNECTION: ${DEFAULT_DB_CONNECTION:-postgresql+psycopg2://postgres:Cookies01!@db:5432/game_integrity}
+      PORT_FRAUD: "5001"
+      PORT_REPORTS: "5000"
+      # As seen from the fraud container, the reports service is at host "reports".
+      REPORTS_SERVICE_URL: ${REPORTS_SERVICE_URL:-http://reports:5000}
+    ports:
+      - "${PORT_FRAUD:-5001}:5001"
+    volumes:
+      - uploads:/app/uploads
+      - appdata:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  reports:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fraud-engine-2026
+    command: ["python", "-m", "backend_v2.service_reports"]
+    environment:
+      DEFAULT_DB_CONNECTION: ${DEFAULT_DB_CONNECTION:-postgresql+psycopg2://postgres:Cookies01!@db:5432/game_integrity}
+      PORT_FRAUD: "5001"
+      PORT_REPORTS: "5000"
+    ports:
+      - "${PORT_REPORTS:-5000}:5000"
+    volumes:
+      - uploads:/app/uploads
+      - appdata:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  uploads:
+  appdata:

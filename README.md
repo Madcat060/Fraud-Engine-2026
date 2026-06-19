@@ -12,6 +12,31 @@ Collusion / fraud detection stack: **Vite + React** UI, **Flask + Socket.IO** ba
 
 **Windows quick start:** from repo root, run `backend_v2\Launch.bat` (seeds rules safely, builds frontend if needed, starts dev + APIs).
 
+## Docker quick start (any OS / dev VM)
+
+Runs the whole stack — Postgres, fraud service, reports service — in containers. No local Python/Node needed, just Docker.
+
+```bash
+cp .env.docker.example .env      # defaults work as-is
+docker compose up --build
+```
+
+Then open:
+
+- **Fraud Engine UI**: http://localhost:5001
+- **Reports API**: http://localhost:5000
+- **Postgres**: `localhost:5432` (user `postgres`, db `game_integrity`)
+
+Useful commands:
+
+- `docker compose up --build -d` — run detached
+- `docker compose logs -f fraud` — tail a service's logs
+- `docker compose down` — stop; add `-v` to also wipe the Postgres volume
+
+How it fits together: a multi-stage `Dockerfile` builds the Vite/React frontend, then bakes it into a Python image. Both the `fraud` and `reports` services share that image (different start commands). DB connection URLs, ports, and Playtech credentials are all set via `.env` (see `.env.docker.example`).
+
+> **Note on remote VMs:** the Reports tab calls `http://localhost:5000` from the browser (hardcoded in `static/app.js`). It works when you browse from the same machine running Docker (or via an SSH port-forward of 5000 and 5001). If you serve the UI from a remote VM and hit it by its IP/hostname, the Reports tab won't reach the reports API until that URL is made configurable.
+
 ## Frontend
 
 - **Source**: `src/` (React)

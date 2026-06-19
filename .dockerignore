@@ -1,0 +1,42 @@
+# Keep the build context small and avoid leaking local state into the image.
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# Node / frontend (rebuilt inside the image)
+node_modules/
+static/dist/
+
+# Environment & secrets
+.env
+backend_v2/.env
+
+# Local runtime state / data (mounted as volumes instead)
+*.log
+data/*.log
+data/source_csvs/
+*.db
+data/gi_cases.db
+data/app_data.json
+data/ews_table_schema.json
+uploads/
+
+# Build artifacts
+dist/
+build/
+*.spec
+
+# VCS / OS / editor
+.git/
+.gitignore
+.gitattributes
+.DS_Store
+Thumbs.db
+
+# Docs not needed at runtime
+docs/
