@@ -1,10 +1,12 @@
-# Fraud Engine 2026 — full stack in containers.
+# Fraud Engine 2026 — production / VM deploy.
 #
-#   docker compose up --build
+# Unlike docker-compose.yml (which BUILDS the image locally), this file PULLS
+# the prebuilt image published to GHCR by the GitHub Actions workflow. Deploy is:
 #
-# Then open http://localhost:5001 (Fraud Engine UI). The Reports API is on
-# http://localhost:5000. Configuration comes from a local .env file — copy
-# .env.dist to .env and fill in the values first.
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# (or just run ./deploy.sh). Copy .env.dist to .env and fill it in first.
 
 services:
   db:
@@ -14,7 +16,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
       POSTGRES_DB: ${POSTGRES_DB:-game_integrity}
     ports:
-      # Exposed so you can connect a SQL client from the host if you want.
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -23,20 +24,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   fraud:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: fraud-engine-2026
+    image: ${FRAUD_IMAGE:-ghcr.io/madcat060/fraud-engine-2026:latest}
     command: ["python", "-m", "backend_v2.service_fraud"]
     environment:
-      # CASE_MANAGEMENT_URL / COLLUSION_DB_URL fall back to this in config.py
-      # when unset, so we only set the one URL here.
       DEFAULT_DB_CONNECTION: ${DEFAULT_DB_CONNECTION:-postgresql+psycopg2://postgres:changeme@db:5432/game_integrity}
       PORT_FRAUD: "5001"
       PORT_REPORTS: "5000"
-      # As seen from the fraud container, the reports service is at host "reports".
       REPORTS_SERVICE_URL: ${REPORTS_SERVICE_URL:-http://reports:5000}
     ports:
       - "${PORT_FRAUD:-5001}:5001"
@@ -49,10 +45,7 @@ services:
     restart: unless-stopped
 
   reports:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: fraud-engine-2026
+    image: ${FRAUD_IMAGE:-ghcr.io/madcat060/fraud-engine-2026:latest}
     command: ["python", "-m", "backend_v2.service_reports"]
     environment:
       DEFAULT_DB_CONNECTION: ${DEFAULT_DB_CONNECTION:-postgresql+psycopg2://postgres:changeme@db:5432/game_integrity}

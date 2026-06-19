@@ -17,7 +17,7 @@ Collusion / fraud detection stack: **Vite + React** UI, **Flask + Socket.IO** ba
 Runs the whole stack — Postgres, fraud service, reports service — in containers. No local Python/Node needed, just Docker.
 
 ```bash
-cp .env.docker.example .env      # defaults work as-is
+cp .env.dist .env                # then edit .env and set POSTGRES_PASSWORD + DEFAULT_DB_CONNECTION
 docker compose up --build
 ```
 
@@ -33,9 +33,30 @@ Useful commands:
 - `docker compose logs -f fraud` — tail a service's logs
 - `docker compose down` — stop; add `-v` to also wipe the Postgres volume
 
-How it fits together: a multi-stage `Dockerfile` builds the Vite/React frontend, then bakes it into a Python image. Both the `fraud` and `reports` services share that image (different start commands). DB connection URLs, ports, and Playtech credentials are all set via `.env` (see `.env.docker.example`).
+How it fits together: a multi-stage `Dockerfile` builds the Vite/React frontend, then bakes it into a Python image. Both the `fraud` and `reports` services share that image (different start commands). DB connection URLs, ports, and Playtech credentials are all set via `.env` (copy `.env.dist` and fill it in — no secrets are committed to the repo).
 
 > **Note on remote VMs:** the Reports tab calls `http://localhost:5000` from the browser (hardcoded in `static/app.js`). It works when you browse from the same machine running Docker (or via an SSH port-forward of 5000 and 5001). If you serve the UI from a remote VM and hit it by its IP/hostname, the Reports tab won't reach the reports API until that URL is made configurable.
+
+## Publish & deploy (upload once, press a button)
+
+The compose quick start above *builds* the image locally. For real deployments the image is **built once by CI and published**, then VMs just **pull and run** it.
+
+**1. Publish (automatic):** `.github/workflows/docker-publish.yml` builds and pushes the image to GitHub Container Registry on every push to `main` (and on `v*` tags). You can also trigger it manually from the repo's **Actions → Build and publish Docker image → Run workflow** button. Published image:
+
+```
+ghcr.io/madcat060/fraud-engine-2026:latest
+```
+
+> First publish only: make sure GitHub Actions can write packages (repo **Settings → Actions → General → Workflow permissions → Read and write**). To let the VM pull without logging in, set the package visibility to **Public** (org/repo **Packages** settings), otherwise run `docker login ghcr.io` on the VM with a PAT that has `read:packages`.
+
+**2. Deploy (press a button on the VM):**
+
+```bash
+cp .env.dist .env                # first time only — then set credentials
+./deploy.sh                      # pull latest + restart
+```
+
+`deploy.sh` just runs `docker compose -f docker-compose.prod.yml pull && up -d`. `docker-compose.prod.yml` is identical to the dev compose except it pulls the published image instead of building. Override the image (e.g. pin a tag) with `FRAUD_IMAGE=ghcr.io/madcat060/fraud-engine-2026:<tag>` in `.env`.
 
 ## Frontend
 
