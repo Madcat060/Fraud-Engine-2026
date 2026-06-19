@@ -349,7 +349,7 @@ sequenceDiagram
 These are flagged for the technical/audit audience; none block operation but several are worth addressing.
 
 1. **Documentation drift (high priority for an audit).** Several `docs/` files still describe a **single rule** ("Rule 1 — Burner / New Pro Accounts") — e.g. `FRAUD_RULES_EXECUTION_FLOW.md`, `FRAUD_PRESETS_AND_SCORING.md`, `KEY_FILES_REFERENCE.md`, `ROI_METRICS.md`. The **code implements five rules** with different definitions (Rule 1 is now "cash margin", not "burner"). Treat this report / the code as authoritative and refresh those docs.
-2. **Hard-coded credentials in source.** `config.py` ships **default DB credentials** (`postgres:Cookies01!`) and **default Playtech credentials** (`PRReports` / a literal password). These should be removed from source and required via environment/secrets, especially before any external distribution or packaging.
+2. **Hard-coded credentials in source.** Historically `config.py` shipped **default DB credentials** and **default Playtech credentials** in source. These have been scrubbed — defaults are now placeholders/empty and real values must be supplied via environment/secrets (`.env`, see `.env.dist`). Note: scrubbing the working tree does not remove secrets already in git history; rotate the affected passwords and consider a history rewrite.
 3. **Single database instance by default.** Source warehouse and case DB default to the same PostgreSQL instance. For production, separate them (and apply least-privilege: the engine only needs read on `Primary_*` and write on case tables).
 4. **Legacy stack still present.** `app.py` / `api.py` / `processor.py` remain only because `routes_reports.py` imports `_run_reports_impl` from `app.py`. Migrating that into `backend_v2` would let the legacy files be deleted (see `docs/PROJECT_LAYOUT.md` "optional next cleanup").
 5. **Open CORS.** Both services use permissive CORS (`*`) and Socket.IO `cors_allowed_origins="*"`. Acceptable for localhost dev; lock down for any networked deployment.
@@ -357,27 +357,3 @@ These are flagged for the technical/audit audience; none block operation but sev
 7. **Mixed local stores.** `data/gi_cases.db` (SQLite) and `data/app_data.json` exist alongside PostgreSQL; confirm which are authoritative vs dev leftovers.
 8. **Test coverage is thin.** Only `backend_v2/tests/test_fraud_rule_config_merge.py` is present; the rule SQL, scoring, and exclusion logic have no automated tests.
 
----
-
-## 13. Suggested next steps
-
-| Priority | Action |
-|----------|--------|
-| High | Refresh `docs/` to the 5-rule reality; make this report the canonical overview |
-| High | Move credentials out of `config.py` into env/secret management |
-| Medium | Split source vs case databases; apply least-privilege DB roles |
-| Medium | Add unit/integration tests for rule SQL, scoring, and exclusions |
-| Medium | Review nickname-based open-case merge in `upsert_cases` |
-| Low | Complete the `_run_reports_impl` migration and remove legacy root files |
-| Low | Restrict CORS / Socket.IO origins for non-local deployments |
-
----
-
-### Key source references
-
-- Engine: `backend_v2/engine/fraud_engine.py` — `run_analysis`, `_evaluate_rule1_burner`, `_evaluate_rule2_major_income`, `_evaluate_rule_common_overlap`, `_finalize_cases`, `upsert_cases`
-- Rules/defaults: `backend_v2/engine/fraud_rule_config_schema.py` — `FRAUD_RULES_META`, `RuleExclusions`, `get_default_configs`
-- Services: `backend_v2/service_fraud.py`, `backend_v2/service_reports.py`
-- API: `backend_v2/api/routes_fraud.py`, `backend_v2/api/routes_reports.py`, `backend_v2/api/ops_dashboard.py`
-- Models/DB/config: `backend_v2/models/case_models.py`, `backend_v2/database.py`, `backend_v2/config.py`
-- Frontend: `src/App.jsx`, `src/Workspace/TriageDashboard.jsx`, `src/Investigation/CaseWorkspace.jsx`, `src/Settings/RuleSettings.jsx`

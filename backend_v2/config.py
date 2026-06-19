@@ -33,7 +33,7 @@ else:
 # Shared game-integrity database connection used across the system.
 DEFAULT_DB_CONNECTION: str = os.getenv(
     "DEFAULT_DB_CONNECTION",
-    "postgresql+psycopg2://postgres:Cookies01!@localhost/game_integrity",
+    "postgresql+psycopg2://postgres:CHANGE_ME@localhost/game_integrity",
 )
 
 # Case management PostgreSQL database (investigation_cases, case_notes, etc.).
@@ -76,8 +76,8 @@ ATTACHMENTS_UPLOAD_ROOT: str = os.getenv(
 # --- External report APIs ---------------------------------------------------
 
 # Playtech report credentials & base URL used by the "live report" endpoint.
-PLAYTECH_ADMIN_USER: str = os.getenv("PLAYTECH_ADMIN_USER", "PRReports")
-PLAYTECH_ADMIN_PASSWORD: str = os.getenv("PLAYTECH_ADMIN_PASSWORD", "Password1234!")
+PLAYTECH_ADMIN_USER: str = os.getenv("PLAYTECH_ADMIN_USER", "")
+PLAYTECH_ADMIN_PASSWORD: str = os.getenv("PLAYTECH_ADMIN_PASSWORD", "")
 
 PLAYTECH_BASE_URL: str = os.getenv(
     "PLAYTECH_BASE_URL",
